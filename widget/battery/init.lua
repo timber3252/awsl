@@ -21,6 +21,8 @@ local function factory(args)
     hiddenWhileCharging = args.hiddenWhileCharging or true,
     status = "",
     powersave = false,
+    lowPowerWarningColor = args.lowPowerWarningColor or '#F48FB1',
+    lowPowerThreshold = args.lowPowerThreshold or 20,
   }
 
   function bat.render(data)
@@ -42,7 +44,11 @@ local function factory(args)
     elseif percent >= 80 and percent <= 100 then
       icon = bat.icons[5]
     end
-    bat.widget:set_markup_silently(icon .. '<b>' .. data .. '</b> ')
+    local data = icon .. '<b>' .. data .. '</b> '
+    if percent >= 0 and percent < battery.lowPowerThreshold then
+      data = string.format('<span color="%s"> %s </span>', battery.lowPowerWarningColor, data)
+    end
+    bat.widget:set_markup_silently(data)
   end
 
   function bat.update()
