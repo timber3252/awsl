@@ -1,6 +1,12 @@
-local awful= require('awful')
+local awful = require('awful')
 
-return function (menu, args)
+--- Popup a menu showing clients of current selected tag(s)
+--- @param args table arguments passed to `awful.menu`
+--- Example:
+--- ```
+--- require('awsl.util.clients-menu')() -- pop up a menu
+--- ```
+local function factory(args)
   local clsTags = awful.screen.focused().selected_tags
   if clsTags == nil then return nil end
   local result = {}
@@ -22,9 +28,11 @@ return function (menu, args)
   end
 
   if #result <= 0 then return nil end
-  if not menu then menu = {} end
+  local menu = {}
   menu.items = result
   local m = awful.menu(menu)
   m:show(args)
   return m
 end
+
+return factory

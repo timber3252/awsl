@@ -1,4 +1,3 @@
-local helpers = require('awsl.helpers')
 local awful = require('awful')
 
 local magnifyClient = nil
@@ -20,7 +19,16 @@ local function magnify(c, width_f, height_f)
   end
 end
 
-return function (c, width_f, height_f)
+--- Magnify (Restore if client is already magnified) a client: 
+--- set it to 'float' and centered with fixed size
+--- @param c client given client
+--- @param width_f number percentage of screen width
+--- @param height_f number percentage of screen height
+--- Example:
+--- ```
+--- require('awsl.util.magnify-client')(c) -- toggle magnify client `c`
+--- ```
+local function factory(c, width_f, height_f)
   if magnifyClient == nil or magnifyClient.valid == false then
     magnify(c, width_f, height_f)
     magnifyClient = c
@@ -35,3 +43,5 @@ return function (c, width_f, height_f)
     magnifyClient = c
   end
 end
+
+return factory

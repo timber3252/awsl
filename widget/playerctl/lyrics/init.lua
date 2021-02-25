@@ -1,5 +1,5 @@
-local netease = require('awsl.widget.playerctl.lyrics.netease')
+local lyrics = {}
 
 return {
-  ElectronNCM = netease
+  ElectronNCM = require('awsl.widget.playerctl.lyrics.netease_lyrics')
 }

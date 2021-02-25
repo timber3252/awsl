@@ -2,7 +2,14 @@ local awful = require('awful')
 local floating_resize_amount = 50
 local tiling_resize_factor = 0.05
 
-return function (c, direction)
+--- Resize a client in given direction
+--- @param c client given client
+--- @param direction string "up", "down", "left", "right", represents the direction of resize
+--- Example:
+--- ```
+--- require('awsl.util.resize-client')(c, "up")
+--- ```
+local function factory(c, direction)
   if awful.layout.get(mouse.screen) == awful.layout.suit.floating or (c and c.floating) then
     if direction == "up" then
       c:relative_move(0, 0, 0, -floating_resize_amount)
@@ -25,3 +32,5 @@ return function (c, direction)
     end
   end
 end
+
+return factory

@@ -1,10 +1,14 @@
 local helpers = require('awsl.helpers')
 local wibox = require('wibox')
 
--- acpi sample outputs
--- Battery 0: Discharging, 75%, 01:51:38 remaining
--- Battery 0: Charging, 53%, 00:57:43 until charged
-
+--- Construct a `battery` widget, `battery` displays the current power status using `acpi`
+--- @param args.timeout number the interval between checks, default is 5 (in seconds) (optional)
+--- @param args.icons table icons, it should have five stats from low to high (optional)
+--- @param args.hiddenWhileCharging boolean if hides when charging, default is true (optional)
+--- @param args.lowPowerWarningColor string a color uses as the warning color when power is low (optional)
+--- @param args.lowPowerThreshold number the threshold of low power warning (optional)
+--- @param args.widget widget default is wibox.widget.textbox (optional)
+--- It doesn't support multi-battery.
 local function factory(args)
   args = args or {}
 
@@ -25,7 +29,7 @@ local function factory(args)
     lowPowerThreshold = args.lowPowerThreshold or 20,
   }
 
-  function bat.render(data)
+  local function render(data)
     if data == nil then
       bat.widget:set_markup_silently("")
       return
@@ -51,25 +55,25 @@ local function factory(args)
     bat.widget:set_markup_silently(data)
   end
 
-  function bat.update()
-    helpers.asyncWithShell(
-      "acpi | sed -n 's/^.*, \\([0-9]*\\)%/\\1/p'",
+  local function update()
+    helpers.spawn.exec(
+      'acpi | sed -n "s/^.*, \\([0-9]*\\)%/\\1/p"',
       function (stdout, _)
         stdout = string.sub(stdout, 1, string.len(stdout) - 1)
         if stdout.find(stdout, 'remaining') ~= nil then
-          bat.render(stdout)
+          render(stdout)
           bat.status = "Discharging"
           bat.powersave = true
         elseif stdout.find(stdout, 'until charged') ~= nil then
           bat.status = "Charging"
           bat.powersave = false
           if not bat.hiddenWhileCharging then
-            bat.render(stdout)
+            render(stdout)
           else
-            bat.render(nil)
+            render(nil)
           end
         else
-          bat.render(nil)
+          render(nil)
           bat.status = "Full"
           bat.powersave = false
         end
@@ -77,7 +81,7 @@ local function factory(args)
     )
   end
 
-  helpers.setInterval('battary', bat.timeout, bat.update)
+  helpers.timer.setInterval(update, bat.timeout)
 
   return bat
 end

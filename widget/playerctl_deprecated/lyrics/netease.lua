@@ -1,3 +1,4 @@
+local env = require('awsl.env')
 local helpers = require('awsl.helpers')
 
 local netease = {}
@@ -9,8 +10,8 @@ function netease.getLyrics(callback)
     callback()
     return
   end
-  helpers.asyncWithShell(
-    'playerctl metadata -p "ElectronNCM" -f "{{mpris:trackid}}" | sed "s/\'//g" | python ' .. helpers.scriptsDir .. '/netease_lyrics_helper.py',
+  helpers.spawn.exec(
+    'playerctl metadata -p "ElectronNCM" -f "{{mpris:trackid}}" | sed "s/\'//g" | python ' .. env.scriptsDir .. 'netease_lyrics_helper.py',
     function (stdout, exitcode)
       currentLyrics = {}
       currentLyrics[-1] = currentSong
@@ -32,7 +33,7 @@ end
 function netease.getContent(_, song, callback)
   currentSong = song
   netease.getLyrics(function ()
-    helpers.async(
+    helpers.spawn.exec(
       'playerctl -p "ElectronNCM" position',
       function(stdout, exitcode)
         stdout = string.sub(stdout, 1, string.len(stdout) - 1)
