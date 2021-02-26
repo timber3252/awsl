@@ -6,8 +6,8 @@ local manager = lgi.Playerctl.PlayerManager()
 local render = require('awsl.widget.playerctl.render')
 
 local function getValidPlayers()
-  local map = helpers.map()
   local mprisPlayers = lgi.Playerctl.list_players()
+  local map = helpers.map()
   for i = 1, #mprisPlayers do
     map.insert(mprisPlayers[i].name, mprisPlayers[i])
   end
@@ -30,20 +30,23 @@ local function factory(args)
     timeout = args.timeout or 0.5,
     trackedPlayerList = args.trackedPlayerList or { "ElectronNCM" }
   }
-
+  
   local mprisPlayers = getValidPlayers()
   local trackedPlayers = {}
-  local currentPlayer = nil
+  playerctl.currentPlayer = nil
+  local _playerctlPlayer = nil
   for k, v in ipairs(playerctl.trackedPlayerList) do
+    trackedPlayers[k] = {}
     if mprisPlayers.contains(v) then
-      trackedPlayers[k] = mprisPlayers.get(v)
+      trackedPlayers[k].name = v
     end
   end
+  mprisPlayers = nil
 
   local function findFirstTrackedPlayer()
     for i = 1, #playerctl.trackedPlayerList do
-      if trackedPlayers[i] ~= nil then
-        return trackedPlayers[i]
+      if trackedPlayers[i].name ~= nil then
+        return lgi.Playerctl.PlayerName { name = trackedPlayers[i].name }
       end
     end
     return nil
@@ -52,7 +55,8 @@ local function factory(args)
   local function insertTrackedPlayers(player)
     for k, v in ipairs(playerctl.trackedPlayerList) do
       if v == player.name then
-        trackedPlayers[k] = player
+        trackedPlayers[k] = {}
+        trackedPlayers[k].name = player.name
       end
     end
   end
@@ -60,40 +64,43 @@ local function factory(args)
   local function deleteTrackedPlayers(player)
     for k, v in ipairs(trackedPlayers) do
       if v.name == player.name then
-        trackedPlayers[k] = nil
+        trackedPlayers[k] = {}
       end
     end
   end
 
-  local function onPlaybackStatus(playerctl, status, _)
-    if playerctl ~= nil then
-      render.onStatusChanged(playerctl.player_name, status, playerctl)
+  local function onPlaybackStatus(current, status, _)
+    if current ~= nil then
+      if playerctl.currentPlayer == nil or current.player_name ~= playerctl.currentPlayer then return end
+      render.onStatusChanged(current.player_name, status, playerctl)
     else
       render.onStatusChanged()
     end
   end
 
-  local function onMetadata(playerctl, metadata, _)
-    if playerctl ~= nil then
+  local function onMetadata(current, metadata, _)
+    if current ~= nil then
+      if playerctl.currentPlayer == nil or current.player_name ~= playerctl.currentPlayer then return end
       render.onSongChanged(
-        playerctl.player_name,
-        helpers.str.trim(playerctl:get_title()),
-        helpers.str.trim(playerctl:get_artist()),
-        helpers.str.trim(playerctl:get_album()),
+        current.player_name,
+        current:get_title(),
+        current:get_artist(),
+        current:get_album(),
         metadata,
-        playerctl
+        current
       )
     else
       render.onSongChanged()
     end
   end
 
-  local function onSeeked(playerctl, position, _)
-    if playerctl ~= nil then
+  local function onSeeked(current, position, _)
+    if current ~= nil then
+      if playerctl.currentPlayer == nil or current.player_name ~= playerctl.currentPlayer then return end
       render.onPositionChanged(
-        playerctl.player_name,
+        current.player_name,
         position,
-        playerctl
+        current
       )
     else
       render.onPositionChanged()
@@ -114,11 +121,12 @@ local function factory(args)
 
   local function followPlayer(player)
     if player == nil then
-      currentPlayer = nil
-      updateInitialData(nil, manager)
+      playerctl.currentPlayer = nil
+      _playerctlPlayer = nil
+      updateInitialData(nil, nil)
     else
-      if currentPlayer == nil or currentPlayer ~= player.name then
-        currentPlayer = player.name
+      if playerctl.currentPlayer == nil or playerctl.currentPlayer ~= player.name then
+        playerctl.currentPlayer = player.name
 
         local playerctlPlayer = lgi.Playerctl.Player.new_from_name(player)
         function playerctlPlayer:on_playback_status(status, manager)
@@ -131,6 +139,7 @@ local function factory(args)
           onSeeked(playerctlPlayer, position, manager)
         end
 
+        _playerctlPlayer = playerctlPlayer
         manager:manage_player(playerctlPlayer)
         updateInitialData(playerctlPlayer, manager)
       end
@@ -154,26 +163,56 @@ local function factory(args)
   manager.on_name_appeared:connect('name-appeared')
   manager.on_name_vanished:connect('name-vanished')
 
-  function playerctl.togglePlayStatus()
-    helpers.spawn.exec(helpers.str.format('playerctl -p %s play-pause', currentPlayer))
+  function playerctl.togglePlayStatus(notify)
+    notify = (notify ~= nil and {notify} or {false})[1]
+    if playerctl.currentPlayer ~= nil then
+      helpers.spawn.exec(helpers.str.format('playerctl -p %s play-pause', playerctl.currentPlayer))
+    end
+    if notify then
+      helpers.log.info({
+        title = 'awsl.widget.playerctl',
+        text = 'playback status: ' .. _playerctlPlayer.playback_status
+      })
+    end
   end
-  function playerctl.nextTrack()
-    helpers.spawn.exec(helpers.str.format('playerctl -p %s next', currentPlayer))
+  function playerctl.nextTrack(notify)
+    notify = (notify ~= nil and {notify} or {false})[1]
+    if playerctl.currentPlayer ~= nil then
+      helpers.spawn.exec(helpers.str.format('playerctl -p %s next', playerctl.currentPlayer))
+    end
+    if notify then
+      helpers.log.info({
+        title = 'awsl.widget.playerctl',
+        text = 'next track',
+        timeout = 3,
+      })
+    end
   end
-  function playerctl.prevTrack()
-    helpers.spawn.exec(helpers.str.format('playerctl -p %s previous', currentPlayer))
+  function playerctl.prevTrack(notify)
+    notify = (notify ~= nil and {notify} or {false})[1]
+    if playerctl.currentPlayer ~= nil then
+      helpers.spawn.exec(helpers.str.format('playerctl -p %s previous', playerctl.currentPlayer))
+    end
+    if notify then
+      helpers.log.info({
+        title = 'awsl.widget.playerctl',
+        text = 'previous track',
+        timeout = 3,
+      })
+    end
   end
 
-  --- TODO: doesn't work
   function playerctl.toggleLyricsMode()
-    render.lyricsMode = not render.lyricsMode
-    render.setSpeed(nil)
+    render.toggleLyricsMode(playerctl.currentPlayer)
+    onPlaybackStatus(_playerctlPlayer, _playerctlPlayer.playback_status, manager)
+    onMetadata(_playerctlPlayer, _playerctlPlayer.metadata, manager)
+    onSeeked(_playerctlPlayer, _playerctlPlayer.position, manager)
   end
 
   playerctl.widget:connect_signal(
     'button::press',
     function (_, _, _, buttonId)
-      if currentPlayer == nil then return end
+      if playerctl.currentPlayer == nil then return end
       if buttonId == 1 then
         playerctl.togglePlayStatus()
       elseif buttonId == 3 then

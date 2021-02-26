@@ -23,19 +23,20 @@ local function factory(args)
       [5] = '<b> </b>',
     },
     hiddenWhileCharging = args.hiddenWhileCharging or true,
-    status = "",
-    powersave = false,
     lowPowerWarningColor = args.lowPowerWarningColor or '#F48FB1',
     lowPowerThreshold = args.lowPowerThreshold or 20,
   }
 
-  local function render(data)
-    if data == nil then
-      bat.widget:set_markup_silently("")
+  local currentStatus = nil
+  local currentPower = nil
+  local currentWarningStatus = false
+
+  local function render(text)
+    if text == nil then
+      bat.widget:set_markup_silently('')
       return
     end
-    local pos = string.find(data, ',')
-    local percent = tonumber(string.sub(data, 1, pos - 1))
+    local percent = tonumber(text)
     local icon = ""
     if percent >= 0 and percent < 15 then
       icon = bat.icons[1]
@@ -48,40 +49,81 @@ local function factory(args)
     elseif percent >= 80 and percent <= 100 then
       icon = bat.icons[5]
     end
-    local data = icon .. '<b>' .. data .. '</b> '
-    if percent >= 0 and percent < battery.lowPowerThreshold then
-      data = string.format('<span color="%s"> %s </span>', battery.lowPowerWarningColor, data)
+
+    local data = icon .. '<b>' .. text .. '</b> '
+    if percent >= 0 and percent < bat.lowPowerThreshold then
+      data = string.format('<span color="%s">%s</span>', bat.lowPowerWarningColor, data)
     end
     bat.widget:set_markup_silently(data)
   end
 
-  local function update()
+  local function onStatusChanged(status)
+    -- do nothing
+  end
+
+  local function onPercentChanged(status, percent)
+    if status == 'discharging' then
+      if currentWarningStatus == false and tonumber(percent) < bat.lowPowerThreshold then
+        currentWarningStatus = true
+        helpers.log.warning({
+          title = 'awsl.widget.battery',
+          text = 'low-battery alert'
+        })
+      end
+      render(percent)
+    elseif status == 'charging' then
+      if currentWarningStatus == true and tonumber(percent) >= bat.lowPowerThreshold then
+        currentWarningStatus = false
+      end
+      render(nil)
+    else
+      render(nil)
+    end
+  end
+
+  local function timeUpdate()
     helpers.spawn.exec(
       'acpi | sed -n "s/^.*, \\([0-9]*\\)%/\\1/p"',
       function (stdout, _)
         stdout = string.sub(stdout, 1, string.len(stdout) - 1)
         if stdout.find(stdout, 'remaining') ~= nil then
-          render(stdout)
-          bat.status = "Discharging"
-          bat.powersave = true
-        elseif stdout.find(stdout, 'until charged') ~= nil then
-          bat.status = "Charging"
-          bat.powersave = false
-          if not bat.hiddenWhileCharging then
-            render(stdout)
-          else
-            render(nil)
+          local first = (currentStatus == nil)
+          currentPower = helpers.str.split(stdout, ',')[1]
+          if currentStatus ~= 'discharging' then
+            currentStatus = 'discharging'
+            onStatusChanged(currentStatus)
+            if not first then
+              helpers.log.info({
+                title = 'awsl.widget.battery',
+                text = 'status changed: discharging' .. '\n' .. stdout
+              })
+            end
           end
+          onPercentChanged(currentStatus, currentPower)
+        elseif stdout.find(stdout, 'until charged') then
+          local first = (currentStatus == nil)
+          currentPower = helpers.str.split(stdout, ',')[1]
+          if currentStatus ~= 'charging' then
+            currentStatus = 'charging'
+            onStatusChanged(currentStatus)
+            if not first then
+              helpers.log.info({
+                title = 'awsl.widget.battery',
+                text = 'status changed: charging' .. '\n' .. stdout
+              })
+            end
+          end
+          onPercentChanged(currentStatus, currentPower)
         else
-          render(nil)
-          bat.status = "Full"
-          bat.powersave = false
+          if helpers.str.find(stdout,'zero rate') == nil then
+            -- helpers.log.error(stdout)
+          end
         end
       end
     )
   end
 
-  helpers.timer.setInterval(update, bat.timeout)
+  helpers.timer.setInterval(timeUpdate, bat.timeout)
 
   return bat
 end

@@ -7,6 +7,7 @@ local helpers = require('awsl.helpers')
 local settings = {}
 local render = {}
 render.widget = nil
+render.lyricsEnabled = false
 
 local statusBox = wibox.widget {
   markup = '',
@@ -20,26 +21,30 @@ local contentBox = wibox.widget {
 
 local scrollContainer = wibox.widget {
   layout = wibox.container.scroll.horizontal,
-  step_function = function (elapsed, size, visible_size, speed)
-    local state = ((elapsed * speed)) / size
-    if state > 1 then
-        return (size - visible_size)
-    end
-    if state < 1/3 then
-        -- In the first 1/3rd of time, do a quadratic increase in speed
-        state = 2 * state * state
-    elseif state < 2/3 then
-        -- In the center, do a linear increase. That means we need:
-        -- If state is 1/3, result is 2/9 = 2 * 1/3 * 1/3
-        -- If state is 2/3, result is 7/9 = 1 - 2 * (1 - 2/3) * (1 - 2/3)
-        state = 5/3*state - 3/9
-    elseif state <= 1 then
-        -- In the last 1/3rd of time, do a quadratic decrease in speed
-        state = 1 - 2 * (1 - state) * (1 - state)
-    end
-    return (size - visible_size) * state
-  end,
   extra_space = 100,
+  step_function = function (elapsed, size, visible_size, speed, extra_space)
+    if render.lyricsEnabled then
+      local state = ((elapsed * speed)) / size
+      if state > 1 then
+          return (size - visible_size)
+      end
+      if state < 1/3 then
+          -- In the first 1/3rd of time, do a quadratic increase in speed
+          state = 2 * state * state
+      elseif state < 2/3 then
+          -- In the center, do a linear increase. That means we need:
+          -- If state is 1/3, result is 2/9 = 2 * 1/3 * 1/3
+          -- If state is 2/3, result is 7/9 = 1 - 2 * (1 - 2/3) * (1 - 2/3)
+          state = 5/3*state - 3/9
+      elseif state <= 1 then
+          -- In the last 1/3rd of time, do a quadratic decrease in speed
+          state = 1 - 2 * (1 - state) * (1 - state)
+      end
+      return (size - visible_size) * state
+    else
+      return wibox.container.scroll.step_functions.linear_increase(elapsed, size, visible_size, speed, extra_space)
+    end
+  end,
   contentBox,
 }
 
@@ -51,9 +56,17 @@ function render.setSpeed(num)
   end
 end
 
+function contentBox.setMarkup(markup)
+  if markup == nil or markup == '' then
+    contentBox:set_markup_silently('<b>...</b>')
+  else
+    contentBox:set_markup_silently('<b>' .. helpers.str.trim(markup) ..  '</b>')
+  end
+end
+
 function contentBox.resetScrolling()
   scrollContainer:reset_scrolling()
-  scrollContainer:emit_signal("widget::redraw_needed")
+  scrollContainer:emit_signal("widget::layout_changed")
 end
 
 function contentBox:setSpeed(num)
@@ -78,8 +91,21 @@ function render.init(args)
       layout = wibox.layout.fixed.horizontal,
       statusBox,
       scrollContainer,
+      wibox.widget.textbox(' '),
     }
   }
+end
+
+function render.toggleLyricsMode(playerName)
+  if settings.lyricsMode and lyrics[playerName] and lyrics[playerName].onReset then
+    lyrics[playerName].onReset()
+  end
+  settings.lyricsMode = not settings.lyricsMode
+  render.setSpeed(nil)
+  helpers.log.info({
+    title = 'awsl.widget.playerctl',
+    text = 'lyrics mode: ' .. (settings.lyricsMode == true and {'on'} or {'off'})[1]
+  })
 end
 --- }}}
 
@@ -96,8 +122,10 @@ function render.onStatusChanged(playerName, status, playerctl)
   end
   if status == "PLAYING" then
     statusBox:set_markup_silently('<b>契</b> ')
+    scrollContainer:continue()
   elseif status == "PAUSED" or status == "STOPPED" then
     statusBox:set_markup_silently('<b></b> ')
+    scrollContainer:pause()
   else
     statusBox:set_markup_silently('')
   end
@@ -110,9 +138,15 @@ function render.onSongChanged(playerName, title, artist, album, raw, playerctl)
   end
   if settings.lyricsMode and lyrics[playerName] and lyrics[playerName].onSongChanged then
     lyrics[playerName].onSongChanged(contentBox, title, artist, album, raw, playerctl)
+    render.lyricsEnabled = true
     return
   end
-  contentBox:set_markup_silently(helpers.str.format('<b>%s - %s</b> ', artist, title))
+  render.lyricsEnabled = false
+  if title and artist then
+    contentBox:set_markup_silently(helpers.str.format('<b>%s - %s</b>', helpers.str.trim(artist), helpers.str.trim(title)))
+  else
+    contentBox.setMarkup()
+  end
 end
 
 function render.onPositionChanged(playerName, position, playerctl)

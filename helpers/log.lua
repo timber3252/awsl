@@ -8,6 +8,12 @@ local log = {}
 --- @param args.timeout integer
 --- @param args.icon string path to icon
 function log.info(args)
+  args.timeout = args.timeout or 10
+  naughty.notify(args)
+end
+
+function log.warning(args)
+  args.preset = naughty.config.presets.critical
   naughty.notify(args)
 end
 

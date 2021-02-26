@@ -7,7 +7,8 @@ local gears = require('gears')
 --- @param args.modes table mode data to initialize
 --- @param args.defaultMode string the default mode, should be appeared in modes
 --- @param args.globalKeys table a table of global keys
---- @param args.widget widget default is wibox.widget.textbox (optional)
+--- @param args.modeWidget widget default is wibox.widget.textbox (optional)
+--- @param args.hintWidget widget default is wibox.widget.textbox (optional)
 --- To switch the mode, you need to define certain keys like the following.
 --- And that why `mode` is defined global in the example.
 --- ```
@@ -20,6 +21,7 @@ local gears = require('gears')
 ---     normal = {
 ---       text = 'NORMAL',
 ---       keys = gears.table.join(...),
+---       hint = 'press a to xxx'
 ---     },
 ---     open = {
 ---       text = 'OPEN',
@@ -33,14 +35,20 @@ local gears = require('gears')
 local function factory(args)
   args = args or {}  
   local mode = {
-    widget = args.widget or wibox.widget.textbox(),
+    modeWidget = args.widget or wibox.widget.textbox(),
+    hintWidget = args.widget or wibox.widget.textbox(),
     modes = args.modes or helpers.log.error('modes is required', 'Errors in `mode` widget'),
     defaultMode = args.defaultMode or helpers.log.error('defaultMode is required', 'Errors in `mode` widget'),
     globalKeys = args.globalKeys or helpers.log.error('globalKeys is required', 'Errors in `mode` widget'),
   }
 
   local function render(data)
-    mode.widget:set_markup_silently('<b> ' .. data .. ' </b>')
+    mode.modeWidget:set_markup_silently('<b> ' .. data.text .. ' </b>')
+    if data.hint ~= nil then
+      mode.hintWidget:set_markup_silently('<b> ' .. data.hint .. ' </b>')
+    else
+      mode.hintWidget:set_markup_silently('')
+    end
   end
 
   --- Set current mode
@@ -49,7 +57,7 @@ local function factory(args)
   function mode.setMode(name)
     if mode.modes[name] then
       root.keys(gears.table.join(mode.globalKeys, mode.modes[name].keys))
-      render(mode.modes[name].text)
+      render(mode.modes[name])
     end
   end
 

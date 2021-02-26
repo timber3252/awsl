@@ -25,9 +25,9 @@ local function fetchLyrics(id, length)
   }
   if statusCode == 200 then
     local content = helpers.json.parse(data).lrc
+    lyrics = {}
     if content == nil then return false end
     content = helpers.json.parse(data).lrc.lyric
-    lyrics = {}
     lyrics[1] = {
       start = -1,
       data = '...',
@@ -63,31 +63,36 @@ end
 
 local function update(contentBox, playerctl)
   local position = playerctl.position / 1000000
-  if currentLine <= #lyrics and position >= lyrics[currentLine].start then
-    contentBox:set_markup_silently('<b>' .. lyrics[currentLine].data .. '</b> ')
-    contentBox:setSpeed(str.len(lyrics[currentLine].data) * 4)
+  while 1 <= currentLine and currentLine <= #lyrics and position >= lyrics[currentLine].start + lyrics[currentLine].timeout do
+    currentLine = currentLine + 1
+  end
+  if 1 <= currentLine and currentLine <= #lyrics and position >= lyrics[currentLine].start then
+    contentBox.setMarkup(lyrics[currentLine].data)
+    contentBox:setSpeed(str.len(lyrics[currentLine].data) * math.log(str.len(lyrics[currentLine].data) * 1.2))
     contentBox.resetScrolling()
     currentLine = currentLine + 1
   end
   if currentLine > #lyrics then
     contentBox:setSpeed(nil)
-    contentBox:set_markup_silently('<b>' .. '...' .. '</b> ')
+    contentBox.setMarkup()
+  end
+end
+
+local function stopTimer()
+  if netease.timer ~= nil then
+    netease.timer:stop()
+    netease.timer = nil
   end
 end
 
 local function refresh(contentBox, playerctl, pos)
-  if netease.timer ~= nil then
-    netease.timer:stop()
-    netease.timer = nil
-    helpers.timer.timerTable['netease-lyrics-helper'] = nil
-  end
+  stopTimer()
   refreshPlayStatus(playerctl, pos)
-  netease.timer = helpers.timer.setTimer(
+  netease.timer = helpers.timer.setInterval(
     function ()
       update(contentBox, playerctl)
     end,
     0.2,
-    'netease-lyrics-helper',
     false
   )
 end
@@ -99,8 +104,13 @@ function netease.onSongChanged(contentBox, title, artist, _, raw, playerctl)
   ) then
     refresh(contentBox, playerctl, 0)
   else
+    stopTimer()
     contentBox:setSpeed(nil)
-    contentBox:set_markup_silently('<b>' .. artist .. ' - ' .. title .. '</b> ')
+    if artist and title then
+      contentBox.setMarkup(artist .. ' - ' .. title)
+    else
+      contentBox.setMarkup()
+    end
   end
 end
 
@@ -108,6 +118,10 @@ function netease.onPositionChanged(contentBox, _, playerctl)
   if #lyrics ~= 0 then
     refresh(contentBox, playerctl)
   end
+end
+
+function netease.onReset()
+  stopTimer()
 end
 
 return netease
