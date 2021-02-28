@@ -11,6 +11,7 @@ local function calcTimestamp(s)
   return tonumber(res[1]) * 60 + tonumber(res[2])
 end
 
+--- TODO: async using coroutine
 local function fetchLyrics(id, length)
   local data = ""
   local ok, statusCode, headers, statusText = http.request {
@@ -68,7 +69,7 @@ local function update(contentBox, playerctl)
   end
   if 1 <= currentLine and currentLine <= #lyrics and position >= lyrics[currentLine].start then
     contentBox.setMarkup(lyrics[currentLine].data)
-    contentBox:setSpeed(str.len(lyrics[currentLine].data) * math.log(str.len(lyrics[currentLine].data) * 1.2))
+    contentBox:setSpeed(str.len(lyrics[currentLine].data) * 5)
     contentBox.resetScrolling()
     currentLine = currentLine + 1
   end

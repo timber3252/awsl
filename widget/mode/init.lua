@@ -33,7 +33,8 @@ local gears = require('gears')
 --- })
 --- ```
 local function factory(args)
-  args = args or {}  
+  args = args or {}
+
   local mode = {
     modeWidget = args.widget or wibox.widget.textbox(),
     hintWidget = args.widget or wibox.widget.textbox(),

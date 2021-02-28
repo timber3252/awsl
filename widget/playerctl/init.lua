@@ -171,7 +171,8 @@ local function factory(args)
     if notify then
       helpers.log.info({
         title = 'awsl.widget.playerctl',
-        text = 'playback status: ' .. _playerctlPlayer.playback_status
+        text = 'playback status: ' .. (_playerctlPlayer.playback_status == 'PLAYING' and 'Paused' or 'Playing'),
+        timeout = 3,
       })
     end
   end

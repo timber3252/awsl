@@ -76,7 +76,7 @@ end
 function render.init(args)
   args = args or {}
 
-  settings.maxContentWidth = args.maxContentWidth or 600
+  settings.maxContentWidth = args.maxContentWidth or 500
   settings.defaultSpeed = args.defaultSpeed or 60
   settings.lyricsMode = (args.lyricsMode ~= nil and {args.lyricsMode} or {true})[1]
 
@@ -144,6 +144,7 @@ function render.onSongChanged(playerName, title, artist, album, raw, playerctl)
   render.lyricsEnabled = false
   if title and artist then
     contentBox:set_markup_silently(helpers.str.format('<b>%s - %s</b>', helpers.str.trim(artist), helpers.str.trim(title)))
+    contentBox.resetScrolling()
   else
     contentBox.setMarkup()
   end
